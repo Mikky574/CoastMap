@@ -26,31 +26,32 @@ class Json_loader:
         self.plot_directory = plot_directory if plot_directory else os.getcwd()
         self.verbose = verbose  # 控制是否打印详细信息
         
-    def plot(self):
-        fig, ax = prepare_plot(self.labels, self.date)
+    def plot(self,categories_l=['水域', '陆地', '养殖区域', '潮滩']):
+        fig, ax = prepare_plot(self.labels, self.date,categories_l=categories_l)
+        
         plt.show()
 
-    def plot_save(self):
+    def plot_save(self,categories_l=['水域', '陆地', '养殖区域', '潮滩']):
         save_path = os.path.join(self.plot_directory, f"{self.date}.png")
-        fig, ax = prepare_plot(self.labels, self.date)
+        fig, ax = prepare_plot(self.labels, self.date,categories_l=categories_l)
         plt.savefig(save_path, bbox_inches='tight')
         plt.close(fig)
         if self.verbose:
             print(f"Saved image to {save_path}")
 
-    def plot_with_coords(self):
+    def plot_with_coords(self,categories_l=['水域', '陆地', '养殖区域', '潮滩']):
         extent = self.get_extent()
         fig, ax = prepare_plot_with_coords(
-            self.labels, self.date, extent, self.transformer
+            self.labels, self.date, extent, self.transformer,categories_l=categories_l
         )
         plt.show()
 
-    def plot_save_with_coords(self, dpi=300):
+    def plot_save_with_coords(self,categories_l=['水域', '陆地', '养殖区域', '潮滩'],dpi=300):
         filename = f"{self.date}.jpg"
         save_path = os.path.join(self.plot_directory, filename)
         extent = self.get_extent()
         fig, ax = prepare_plot_with_coords(
-            self.labels, self.date, extent, self.transformer
+            self.labels, self.date, extent, self.transformer,categories_l=categories_l
         )
         plt.savefig(save_path, dpi=dpi, bbox_inches='tight')
         plt.close(fig)
@@ -89,5 +90,3 @@ class FolderProcessor:
         print("Starting to process files...")
         self.process_folder()
         print("Completed processing all files.")
-
-        

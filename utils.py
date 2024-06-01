@@ -1,11 +1,6 @@
 import numpy as np
 from shapely.geometry import Polygon
-import numpy as np
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon, box
-from shapely.ops import unary_union, polygonize
-from matplotlib.patches import Polygon as MplPolygon
-from matplotlib.collections import PatchCollection
 from matplotlib.path import Path
 import json
 
@@ -15,7 +10,6 @@ def create_polygon(points):
         raise ValueError("At least three points are required to form a polygon.")
 
     return Polygon(points)
-
 
 def process_data(data, image_shape):
     # 子函数1: 解析标签和优先级
@@ -104,40 +98,55 @@ def process_data(data, image_shape):
     labels = flatten_priorities(labels) 
     return labels # 掩码类型的数据
 
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.colors import ListedColormap
-
 # 超参数设置
 FONT = 'SimHei'  # 中文字体设置为黑体
-COLOR_MAP = {
-    'water': 0, 'land': 1, 'grid_field': 2, 'tidal_flat': 3
-}
-C_MAP_COLORS = [
-    (0.255, 0.298, 0.529),  # 深蓝
-    (135/255, 86/255, 72/255),  # 棕色
-    (0.612, 0.702, 0.831),  # 浅蓝
-    (246/255, 225/255, 198/255)  # 灰色
-]
-LABELS = ['水域', '陆地', '养殖区域', '潮滩']
 
-def prepare_plot(labels, date):
+COLOR_MAP = {
+    'water': (0.255, 0.298, 0.529),
+    'land': (135/255, 86/255, 72/255),
+    'grid_field': (0.612, 0.702, 0.831),
+    'tidal_flat': (246/255, 225/255, 198/255)
+}
+
+# 中文到英文的映射
+CHINESE_TO_ENGLISH = {
+    '水域': 'water',
+    '陆地': 'land',
+    '养殖区域': 'grid_field',
+    '潮滩': 'tidal_flat'
+}
+
+def prepare_plot(labels, date, categories_l):
+    
     plt.rcParams['font.sans-serif'] = [FONT]
     plt.rcParams['axes.unicode_minus'] = False
+    # Create an empty RGB image filled with white color
+    img_shape = next(iter(labels.values())).shape
+    img = np.ones((*img_shape, 3))
 
-    cmap = ListedColormap(C_MAP_COLORS)
-    visualization_array = np.zeros_like(next(iter(labels.values())), dtype=int)
+    # Convert categories_l from Chinese to English
+    categories_en = [CHINESE_TO_ENGLISH[cat] for cat in categories_l]
 
-    for label, mask in labels.items():
-        color_index = COLOR_MAP.get(label, 0)  # 未知类别默认为0（水域）
-        visualization_array[mask] = color_index
+    # Apply colors to the image based on the categories
+    for category, category_en in zip(categories_l, categories_en):
+        mask = labels[category_en]
+        color = COLOR_MAP[category_en]
+        img[mask] = color
 
+    # Plot the image
     fig, ax = plt.subplots()
-    cax = ax.imshow(visualization_array, cmap=cmap, interpolation='nearest')
-    cbar = fig.colorbar(cax, ticks=range(len(COLOR_MAP)))
-    cbar.set_ticklabels(LABELS)
-    plt.title(date)
-
+    ax.imshow(img, extent=(0, img_shape[1], 0, img_shape[0]), origin='upper')
+    
+    # Create legend with squares
+    handles = [plt.Line2D([0], [0], marker='s', color='w', markerfacecolor=COLOR_MAP[CHINESE_TO_ENGLISH[cat]], markersize=10, linestyle='None', label=cat) 
+               for cat in categories_l]
+    
+    ax.legend(handles=handles)
+    ax.axis('on')
+    
+    # Set title with date
+    ax.set_title(f"Date: {date}")
+    
     return fig, ax
 
 # 提取形状
@@ -148,34 +157,26 @@ def get_shape(data_js):
 def get_date(filename):
     return filename.split('_')[3]
 
+def prepare_plot_with_coords(labels, date, extent, transformer, categories_l):
+    fig, ax = prepare_plot(labels, date, categories_l)
 
-def prepare_plot_with_coords(labels, date, extent, transformer):
-    plt.rcParams['font.sans-serif'] = [FONT]
-    plt.rcParams['axes.unicode_minus'] = False
-
-    cmap = ListedColormap(C_MAP_COLORS)
-    visualization_array = np.zeros_like(next(iter(labels.values())), dtype=int)
-
-    for label, mask in labels.items():
-        color_index = COLOR_MAP.get(label, 0)
-        visualization_array[mask] = color_index
-
-    fig, ax = plt.subplots()
-    cax = ax.imshow(visualization_array, cmap=cmap, interpolation='nearest', extent=[0, extent[1] - extent[0], 0, extent[2] - extent[3]])
-    cbar = fig.colorbar(cax, ticks=range(len(COLOR_MAP)))
-    cbar.set_ticklabels(LABELS)
-    plt.title(date)
-
-    # 获取经纬度坐标轴
-    left_bottom = transformer.transform(extent[0], extent[3])
-    right_top = transformer.transform(extent[1], extent[2])
+    left_bottom = transformer.transform(extent[0], extent[2])
+    right_top = transformer.transform(extent[1], extent[3])
 
     ax.set_xlabel('Longitude')
     ax.set_ylabel('Latitude')
-    ax.set_xticks(np.linspace(0, extent[1] - extent[0], num=5))
-    ax.set_yticks(np.linspace(0, extent[2] - extent[3], num=5))
-    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: f'{left_bottom[0] + val * (right_top[0] - left_bottom[0]) / (extent[1] - extent[0]):.2f}° E'))
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: f'{left_bottom[1] + val * (right_top[1] - left_bottom[1]) / (extent[3] - extent[2]):.2f}° N'))
+    
+    # 从ax中获取图像的宽度和高度
+    x_extent = ax.get_xlim()
+    y_extent = ax.get_ylim()
+    
+    width = x_extent[1] - x_extent[0]
+    height = y_extent[1] - y_extent[0]
+    
+    ax.set_xticks(np.linspace(x_extent[0], x_extent[1], num=5))
+    ax.set_yticks(np.linspace(y_extent[0], y_extent[1], num=5))
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: f'{left_bottom[0] + val * (right_top[0] - left_bottom[0]) / width:.2f}° E'))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda val, pos: f'{left_bottom[1] + val * (right_top[1] - left_bottom[1]) / height:.2f}° N'))
 
     return fig, ax
 
